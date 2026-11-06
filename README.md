@@ -81,6 +81,7 @@ remoto desconhecido não é reenviado automaticamente.
 - [Problemas comuns](docs/troubleshooting.md)
 - [Regras e fontes das plataformas](docs/platforms.md)
 - [API local opcional](docs/api.md)
+- [Extensão auxiliar do TikTok](docs/tiktok_extension.md)
 
 ## Executável Windows
 

@@ -50,3 +50,39 @@ As fontes do display virtual usaram fallback no Linux; o empacotamento Windows i
 - A CI foi configurada; sua existência não significa que já executou ou produziu artefatos Windows.
 - Publicação de conteúdo, classificação Shorts e ausência de penalidades dependem das plataformas,
   da conta e dos direitos sobre o vídeo e a música.
+
+## Atualização 0.2 — extensão TikTok
+
+Comandos adicionais executados:
+
+```bash
+DISPLAY=:98 .venv/bin/python -m pytest -q
+.venv/bin/ruff check .
+npm --prefix extension test
+node --check extension/panel.mjs
+node --check extension/background.mjs
+```
+
+Resultado atualizado: **94 testes Python passaram**, sem testes ignorados, e
+**32 testes JavaScript passaram**. Ruff, compilação/imports e sintaxe dos módulos
+JavaScript passaram. O aviso de descontinuação do TestClient continua sem causar falhas.
+
+Os testes novos exercitam o servidor local da ponte, consumo único e expiração
+do código, limite de tentativas, isolamento por extensão, rejeição de origens
+web e de outras plataformas, revogação, encerramento sem fechar o aplicativo,
+persistência de agendamento declarado e confirmação manual posterior de publicação.
+Os testes gráficos cobrem os controles de pareamento e a ordem de encerramento.
+O cliente JavaScript real da extensão também foi executado em Node contra a
+ponte Python por HTTP local: pareamento, isolamento das tarefas, declaração de
+agendamento, confirmação manual posterior e revogação passaram. Esse teste não
+substitui a validação do painel no navegador.
+
+Os testes JavaScript exercitam o cliente da ponte e o analisador de HTML offline,
+incluindo estados ocultos, avisos, carregamento, botão desabilitado, HTML inerte
+e proibição de inferir publicação a partir do upload. Não testam uma conta TikTok.
+
+A instalação real da extensão neste Chromium foi impedida pela política
+administrativa `ExtensionInstallBlocklist: ["*"]` existente na máquina.
+Essa política não foi alterada ou contornada. A instalação e a interação da
+extensão no Chrome/Edge Windows ainda precisam de validação no computador do usuário.
+Não foi realizado nenhum upload nem agendamento real no TikTok.

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MultiPost · Assistente TikTok</title>
+  <link rel="stylesheet" href="panel.css">
+  <script type="module" src="panel.mjs"></script>
+</head>
+<body>
+  <header>
+    <div class="wordmark">MultiPost<span> / TikTok</span></div>
+    <p>Seu vídeo e sua legenda, organizados para publicar no Studio.</p>
+    <span id="connection-state" class="badge">Não conectado</span>
+  </header>
+
+  <main>
+    <p id="feedback" role="status" aria-live="polite"></p>
+
+    <section id="pairing" class="card">
+      <h1>Conectar ao aplicativo</h1>
+      <p>No MultiPost, ative a ponte da extensão e gere um código de pareamento. Digite os oito números abaixo.</p>
+      <form id="pair-form">
+        <label for="pair-code">Código temporário</label>
+        <input id="pair-code" type="text" inputmode="numeric" pattern="[0-9]{8}" maxlength="8"
+          autocomplete="off" spellcheck="false" required placeholder="00000000">
+        <button id="pair-button" type="submit" class="primary">Conectar</button>
+      </form>
+      <p class="muted">O código vem do MultiPost, não do TikTok. Nenhuma senha ou cookie de rede social é solicitado.</p>
+    </section>
+
+    <div id="workspace" hidden>
+      <section class="card">
+        <div class="row"><h1>Tarefas TikTok</h1><button id="refresh" type="button" class="small">Atualizar</button></div>
+        <label for="job-select">Escolha uma tarefa</label>
+        <select id="job-select"><option value="">Selecione…</option></select>
+        <p id="empty" class="muted" hidden>Sem tarefas TikTok preparadas. No MultiPost, crie uma publicação e aguarde o pacote ficar pronto.</p>
+      </section>
+
+      <section id="job-detail" class="card" hidden>
+        <h2 id="job-title"></h2>
+        <p id="job-state" class="badge"></p>
+        <label for="video-path">Arquivo preparado</label>
+        <p id="video-name" class="muted"></p>
+        <textarea id="video-path" readonly rows="2" spellcheck="false"></textarea>
+        <button id="copy-path" type="button">Copiar caminho do vídeo</button>
+        <p class="muted">No seletor de arquivos do TikTok, cole o caminho no campo “Nome” e clique em Abrir.</p>
+
+        <label for="caption">Legenda desta tarefa</label>
+        <textarea id="caption" readonly rows="5" spellcheck="false"></textarea>
+        <button id="copy-caption" type="button">Copiar legenda</button>
+        <p id="intended-schedule" class="notice"></p>
+        <button id="open-studio" type="button" class="primary">Abrir TikTok Studio</button>
+
+        <details>
+          <summary>Como concluir no TikTok</summary>
+          <ol>
+            <li>Escolha o arquivo preparado no Studio e cole a legenda.</li>
+            <li>Aguarde o envio terminar. “Enviado” significa apenas que o arquivo foi carregado.</li>
+            <li>Revise as verificações, audiência, direitos de uso e marcação de conteúdo por IA, quando aplicável.</li>
+            <li>Para agendar, escolha uma data e hora aceitas pelo TikTok. A tela enviada pelo usuário exige ao menos 15 minutos de antecedência; siga a validação que aparecer na sua conta.</li>
+            <li>Clique em Publicar ou Agendar no próprio TikTok e confira a confirmação no Studio.</li>
+          </ol>
+        </details>
+      </section>
+
+      <section id="confirmation" class="card" hidden>
+        <h2>Registrar o que você concluiu</h2>
+        <p>Este registro é uma declaração sua. A extensão não recebe confirmação da API do TikTok.</p>
+        <label for="outcome">Resultado no Studio</label>
+        <select id="outcome">
+          <option value="published">Publiquei o vídeo</option>
+          <option value="scheduled">Agendei no TikTok</option>
+        </select>
+        <div id="schedule-fields" hidden>
+          <label for="scheduled-at">Data e hora escolhidas no TikTok</label>
+          <input id="scheduled-at" type="datetime-local">
+          <p id="local-timezone" class="muted"></p>
+        </div>
+        <label for="result-url">Link do TikTok, se disponível</label>
+        <input id="result-url" type="url" placeholder="https://www.tiktok.com/@…/video/…" autocomplete="off">
+        <label class="check"><input id="declared" type="checkbox">
+          <span>Conferi no TikTok que a publicação ou o agendamento foi concluído.</span></label>
+        <button id="confirm-result" type="button" disabled>Registrar minha confirmação</button>
+      </section>
+
+      <details class="card">
+        <summary>Conferir um HTML copiado (opcional)</summary>
+        <p>Esta análise é local e pontual. A extensão não lê a página do TikTok. Cole somente o trecho de status, sem informações de login.</p>
+        <textarea id="snapshot" rows="4" spellcheck="false" placeholder="Cole aqui um trecho de HTML"></textarea>
+        <button id="analyze-snapshot" type="button">Analisar trecho</button>
+        <p id="snapshot-result" aria-live="polite"></p>
+        <p class="muted">Nenhum resultado desta análise registra uma publicação ou um agendamento.</p>
+      </details>
+
+      <button id="disconnect" type="button" class="quiet">Desconectar extensão</button>
+    </div>
+  </main>
+  <footer>Modo assistido · sem cliques automáticos, acesso a cookies ou manipulação do TikTok.</footer>
+</body>
+</html>

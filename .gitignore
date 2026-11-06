@@ -13,6 +13,7 @@ client_secret*.json
 *token*.json
 api-key
 instance.lock
+node_modules/
 *.sqlite*
 *.db*
 *.log*

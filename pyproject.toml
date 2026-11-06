@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "multipost-desktop"
-version = "0.1.0"
+version = "0.2.0"
 description = "Publicação de vídeos com integrações oficiais e assistência por plataforma"
 requires-python = ">=3.12"
 dependencies = [

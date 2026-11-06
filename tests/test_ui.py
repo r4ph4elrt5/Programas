@@ -29,6 +29,89 @@ def test_blank_schedule_means_immediate():
 
 
 @pytest.mark.skipif(sys.platform == "linux" and not os.environ.get("DISPLAY"), reason="GUI requires Xvfb/display")
+def test_desktop_companion_pairing_and_shutdown(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from multipost.service import AppService
+
+    events = []
+
+    class FakeBridge:
+        def __init__(self, service):
+            self.running = False
+            self.connected = False
+            self.codes = iter(["12345678", "87654321"])
+
+        def start(self):
+            self.running = True
+            events.append("start")
+
+        def pairing_code(self):
+            return next(self.codes)
+
+        def stop(self):
+            self.running = False
+            self.connected = False
+            events.append("bridge_stop")
+
+    monkeypatch.setitem(sys.modules, "multipost.companion", SimpleNamespace(CompanionBridge=FakeBridge))
+    service = AppService(tmp_path / "data")
+    real_close = service.close
+
+    def close_service():
+        events.append("service_close")
+        real_close()
+
+    monkeypatch.setattr(service, "close", close_service)
+    monkeypatch.setattr("multipost.ui.messagebox.askyesno", lambda *args, **kwargs: True)
+    window = MainWindow(service)
+    callback_errors = []
+    window.report_callback_exception = lambda *args: callback_errors.append(args)
+
+    def wait_until(predicate):
+        deadline = time.monotonic() + 5
+        while not predicate() and time.monotonic() < deadline:
+            window.update()
+            time.sleep(0.01)
+        assert predicate()
+
+    try:
+        window.show("Configurações")
+        assert window._last_render_error is None
+        assert window._bridge_status.cget("text") == "Ponte desligada."
+        window._start_bridge()
+        wait_until(lambda: window._bridge_code == "12345678")
+        assert window._bridge_pair_label.cget("text") == "Código de pareamento: 12345678"
+        assert "12345678" not in window._status.cget("text")
+        window._bridge.connected = True
+        window._new_bridge_code()
+        wait_until(lambda: window._bridge_code == "87654321")
+        assert window._bridge_status.cget("text") == "Ponte ativa · extensão pareada."
+        assert window._bridge_pair_label.cget("text") == "Código de pareamento: 87654321"
+        window.show("Logs e diagnóstico")
+        assert window._last_render_error is None
+        window.show("Configurações")
+        assert window._bridge_pair_label.cget("text") == "Código de pareamento: 87654321"
+        window._stop_bridge()
+        wait_until(lambda: window._bridge_code is None)
+        assert window._bridge_status.cget("text") == "Ponte desligada."
+        assert window._bridge_pair_label.cget("text") == ""
+        assert callback_errors == []
+    finally:
+        window._close()
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            try:
+                if not window.winfo_exists():
+                    break
+                window.update()
+            except Exception:
+                break
+            time.sleep(0.01)
+    assert events[-2:] == ["bridge_stop", "service_close"]
+
+
+@pytest.mark.skipif(sys.platform == "linux" and not os.environ.get("DISPLAY"), reason="GUI requires Xvfb/display")
 def test_desktop_navigation_draft_and_threaded_publish(tmp_path, monkeypatch):
     from multipost.service import AppService
 

@@ -20,7 +20,7 @@ try {
             throw "$tool nao encontrado. Instale FFmpeg, adicione bin ao PATH e reabra o PowerShell."
         }
     }
-    & $pythonExe -m pip install -e ".[dev]"
+    & $pythonExe -m pip install -e ".[dev,api]"
     if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar dependencias." }
     & $pythonExe -m multipost --diagnostics
     if ($LASTEXITCODE -ne 0) { throw "Diagnostico encontrou um problema. Veja a mensagem acima." }

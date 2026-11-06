@@ -65,3 +65,17 @@ examinadas durante o desenvolvimento. Os demais links servem como referência;
 não foi validada uma autorização real de conta em nenhuma rede. Os conectores
 assistidos abrem apenas destinos oficiais e exportam arquivos locais. Não
 automatizam login, cliques, cookies, CAPTCHA ou publicação em endpoints privados.
+
+## Extensão auxiliar TikTok (0.2)
+
+Os [termos TikTok em português](https://www.tiktok.com/legal/page/row/terms-of-service/pt-BR),
+obtidos e examinados nesta atualização, proíbem “usar scripts automatizados para
+colher informações dos Serviços ou de outra forma interagir com os Serviços”.
+Por isso a extensão não recebe permissão de acesso às páginas TikTok nem injeta
+código nelas. Ela acessa somente a ponte local do MultiPost, permite copiar
+dados sob comando do usuário e abre o site oficial. O usuário realiza o upload,
+preenchimento e clique final. Isso não é uma certificação ou autorização do TikTok.
+
+O HTML enviado pelo usuário serve como evidência estática para testes offline.
+Nenhum seletor, ícone de sucesso, progresso de upload ou botão habilitado é
+interpretado como autorização para automatizar nem confirmação de publicação.

@@ -49,13 +49,14 @@ LABELS = {
     "UPLOADED_PRIVATE": "Enviado; vídeo privado ou não listado",
     "WAITING_USER": "Aguardando publicação manual", "PREPARED": "Pacote preparado",
     "USER_CONFIRMED": "Publicação declarada pelo usuário",
+    "USER_SCHEDULED": "Agendamento declarado pelo usuário",
     "USER_CANCELLED": "Cancelado pelo usuário", "CANCELLED": "Cancelado",
     "FAILED": "Falhou", "AUTH_REQUIRED": "Conecte sua conta",
     "APPROVAL_REQUIRED": "Requer aprovação da plataforma",
     "UNKNOWN_REMOTE_STATUS": "Resultado incerto — verificar antes de reenviar",
     "MISSED_SCHEDULE": "Horário perdido — reagende ou envie agora",
 }
-TERMINAL = {"PUBLISHED", "USER_CONFIRMED", "UPLOADED_PRIVATE", "CANCELLED", "USER_CANCELLED"}
+TERMINAL = {"PUBLISHED", "USER_CONFIRMED", "USER_SCHEDULED", "UPLOADED_PRIVATE", "CANCELLED", "USER_CANCELLED"}
 
 
 def open_local(path: str | Path) -> None:
@@ -97,6 +98,9 @@ class MainWindow(ctk.CTk):
         self._closing = False
         self._tick_running = False
         self._busy = 0
+        self._bridge = None
+        self._bridge_lock = threading.Lock()
+        self._bridge_code = None
         self._draft_after = None
         self._conversion_cancel = threading.Event()
         self._images = []
@@ -204,6 +208,8 @@ class MainWindow(ctk.CTk):
 
     def _tick_done(self, _):
         self._tick_running = False
+        if self._section == "Configurações":
+            self._refresh_bridge_status()
         if self._section in {"Dashboard", "Fila de publicações", "Agendamentos", "Histórico"}:
             if self._job_signature(self.service.jobs()) != self._last_job_signature:
                 fraction = self._body._parent_canvas.yview()[0]
@@ -289,7 +295,7 @@ class MainWindow(ctk.CTk):
             ("Confirmadas pela API", sum(j["status"] == "PUBLISHED" for j in jobs)),
             ("Confirmadas por você", sum(j["status"] == "USER_CONFIRMED" for j in jobs)),
             ("Aguardando ação manual", sum(j["status"] == "WAITING_USER" for j in jobs)),
-            ("Pendentes / agendadas", sum(j["status"] in {"READY", "SCHEDULED", "UPLOADING", "PROCESSING"} for j in jobs)),
+            ("Pendentes / agendadas", sum(j["status"] in {"READY", "SCHEDULED", "USER_SCHEDULED", "UPLOADING", "PROCESSING"} for j in jobs)),
             ("Precisam de atenção", sum(j["status"] in {"FAILED", "AUTH_REQUIRED", "UNKNOWN_REMOTE_STATUS", "MISSED_SCHEDULE"} for j in jobs)),
         ]
         grid = ctk.CTkFrame(self._body, fg_color="transparent")
@@ -651,9 +657,11 @@ class MainWindow(ctk.CTk):
         if self._job_status != "Todos os estados":
             jobs = [j for j in jobs if j["status"] == self._job_status]
         if self._section == "Agendamentos":
-            jobs = [j for j in jobs if j.get("scheduled_at") and j["status"] not in TERMINAL]
-            self._text("Horários persistidos em UTC. O computador e o MultiPost precisam estar ligados. "
-                       "Horários perdidos exigem sua revisão antes de enviar.")
+            jobs = [j for j in jobs if j["status"] == "USER_SCHEDULED"
+                    or (j.get("scheduled_at") and j["status"] not in TERMINAL)]
+            self._text("O preparo local exige computador e MultiPost ligados. Horários locais perdidos "
+                       "exigem sua revisão. Agendamentos declarados no TikTok aparecem separadamente; "
+                       "o MultiPost não recebeu confirmação deles por API.")
         elif self._section == "Histórico":
             jobs = [j for j in jobs if j["status"] in TERMINAL | {"FAILED", "UNKNOWN_REMOTE_STATUS"}]
             self._text("Confirmações da API e confirmações declaradas por você aparecem com rótulos diferentes.")
@@ -675,7 +683,17 @@ class MainWindow(ctk.CTk):
                     local = datetime.fromisoformat(job["scheduled_at"]).astimezone().strftime("%d/%m/%Y %H:%M %Z")
                 except ValueError:
                     local = job["scheduled_at"]
-                self._text("Horário: " + local, card)
+                prefix = "Preparo local solicitado: " if job["platform"] == "tiktok" else "Horário: "
+                self._text(prefix + local, card)
+            if status == "USER_SCHEDULED":
+                when = job.get("metadata", {}).get("tiktok_scheduled_at")
+                if when:
+                    try:
+                        when = datetime.fromisoformat(when).astimezone().strftime("%d/%m/%Y %H:%M %Z")
+                    except ValueError:
+                        pass
+                    self._text("Agendado no TikTok, segundo sua declaração: " + when, card)
+                self._text("O MultiPost não recebeu confirmação da API nem verificou a publicação futura.", card)
             if job.get("error"):
                 self._text(job["error"], card, text_color=("#B45309", "#FBBF24"))
             if status in {"UPLOADING", "PROCESSING", "VALIDATING"}:
@@ -686,7 +704,7 @@ class MainWindow(ctk.CTk):
             if job.get("url"):
                 self._button(self._buttons(card), "Abrir publicação", lambda url=job["url"]: webbrowser.open(url))
             actions = self._buttons(card)
-            if status in {"WAITING_USER", "PREPARED", "USER_CONFIRMED"}:
+            if status in {"WAITING_USER", "PREPARED", "USER_CONFIRMED", "USER_SCHEDULED"}:
                 self._button(actions, "Copiar legenda", lambda caption=job.get("caption", ""): self._copy(caption), width=115)
                 if job.get("export_dir"):
                     self._button(actions, "Abrir pacote", lambda path=job["export_dir"]: self._open(path), width=110)
@@ -815,6 +833,77 @@ class MainWindow(ctk.CTk):
         self._button(self._buttons(card), "Abrir pasta de dados", lambda: self._open(self.service.data_dir))
         self._text("Privacidade: nenhuma senha de rede social é solicitada. Os vídeos originais não são "
                    "sobrescritos. Um pacote assistido só aparece como concluído após sua confirmação.")
+        self._bridge_settings()
+
+    def _bridge_settings(self):
+        card = self._card()
+        self._text("Extensão TikTok", card, font=ctk.CTkFont(size=18, weight="bold"))
+        self._text("A extensão recebe as tarefas locais, oferece legenda e caminho do vídeo e abre o TikTok Studio. "
+                   "Você envia o arquivo, revisa as opções e publica ou agenda no site oficial. "
+                   "Ela não acessa cookies nem controla a página do TikTok.", card)
+        self._text("Instale a pasta extension em chrome://extensions ou edge://extensions usando "
+                   "Carregar sem compactação. O guia docs/tiktok_extension.md explica o passo a passo.", card)
+        self._bridge_status = self._text("", card)
+        self._bridge_pair_label = self._text("", card, font=ctk.CTkFont(size=20, weight="bold"))
+        self._text("O código dura 5 minutos e serve apenas para parear sua extensão neste computador. "
+                   "Não o envie ao chat, a sites ou a outras pessoas.", card)
+        bar = self._buttons(card)
+        self._button(bar, "Ativar ponte", self._start_bridge, width=130)
+        self._button(bar, "Novo código", self._new_bridge_code, width=115)
+        self._button(bar, "Desligar ponte", self._stop_bridge, width=130,
+                     fg_color=("#64748B", "#374151"))
+        self._text("A ponte escuta somente 127.0.0.1:8765 e funciona enquanto este MultiPost estiver aberto. "
+                   "Não execute a API em outra janela usando a mesma porta ou banco.", card)
+        self._refresh_bridge_status()
+
+    def _refresh_bridge_status(self):
+        if self._section != "Configurações" or not hasattr(self, "_bridge_status"):
+            return
+        if not self._bridge_status.winfo_exists():
+            return
+        running = bool(self._bridge and self._bridge.running)
+        connected = bool(running and self._bridge.connected)
+        self._bridge_status.configure(text=("Ponte ativa · extensão pareada." if connected else
+                                            "Ponte ativa · aguardando pareamento." if running else
+                                            "Ponte desligada."))
+        self._bridge_pair_label.configure(text=("Código de pareamento: " + self._bridge_code)
+                                          if running and self._bridge_code else "")
+
+    def _show_bridge_code(self, code):
+        self._bridge_code = code
+        self._refresh_bridge_status()
+
+    def _start_bridge(self):
+        def start():
+            try:
+                from multipost.companion import CompanionBridge
+            except ImportError:
+                raise RuntimeError("A ponte precisa do módulo API. Execute scripts/setup.ps1 para atualizar "
+                                   "as dependências e abra o MultiPost novamente.") from None
+            with self._bridge_lock:
+                if self._bridge is None:
+                    self._bridge = CompanionBridge(self.service)
+                self._bridge.start()
+                return self._bridge.pairing_code()
+
+        self._submit(start, self._show_bridge_code, "Ativando a ponte local da extensão…")
+
+    def _new_bridge_code(self):
+        def renew():
+            with self._bridge_lock:
+                if not self._bridge or not self._bridge.running:
+                    raise ValueError("Ative a ponte antes de gerar um código.")
+                return self._bridge.pairing_code()
+
+        self._submit(renew, self._show_bridge_code, "Gerando um novo código local…")
+
+    def _stop_bridge(self):
+        def stop():
+            with self._bridge_lock:
+                if self._bridge:
+                    self._bridge.stop()
+
+        self._submit(stop, lambda _: self._show_bridge_code(None), "Desligando a ponte local…")
 
     def _diagnostics(self):
         from multipost import __version__
@@ -861,6 +950,9 @@ class MainWindow(ctk.CTk):
         def finish():
             try:
                 self._pool.shutdown(wait=True, cancel_futures=True)
+                with self._bridge_lock:
+                    if self._bridge:
+                        self._bridge.stop()
                 self.service.close()
             finally:
                 stopped.set()

@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "MultiPost · Assistente TikTok",
+  "version": "0.2.0",
+  "description": "Receba tarefas locais do MultiPost e organize a publicação manual no TikTok Studio.",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage", "sidePanel", "clipboardWrite"],
+  "host_permissions": ["http://127.0.0.1:8765/*"],
+  "action": {"default_title": "Abrir assistente MultiPost"},
+  "background": {"service_worker": "background.mjs", "type": "module"},
+  "side_panel": {"default_path": "panel.html"},
+  "content_security_policy": {
+    "extension_pages": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-src 'none'; object-src 'none'; base-uri 'none'; connect-src http://127.0.0.1:8765"
+  }
+}

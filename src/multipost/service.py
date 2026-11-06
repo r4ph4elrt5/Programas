@@ -23,7 +23,7 @@ from .media import MediaCancelled, MediaService
 from .platforms import PLATFORM_NAMES, registry
 from .youtube import AuthRequired, UploadCancelled, UploadUncertain, YoutubeClient, validate_metadata
 
-TERMINAL = {"PUBLISHED", "UPLOADED_PRIVATE", "USER_CONFIRMED", "CANCELLED", "USER_CANCELLED"}
+TERMINAL = {"PUBLISHED", "UPLOADED_PRIVATE", "USER_CONFIRMED", "USER_SCHEDULED", "CANCELLED", "USER_CANCELLED"}
 RETRYABLE = {"FAILED", "AUTH_REQUIRED", "MISSED_SCHEDULE"}
 LOG = logging.getLogger("multipost.service")
 
@@ -382,20 +382,49 @@ class AppService:
     def confirm_manual(self, identity, url=""):
         with self._state_lock:
             job = self.job(identity)
-            if job["status"] != "WAITING_USER" or job["platform"] == "youtube":
+            can_confirm = (job["status"] == "WAITING_USER" or
+                           (job["platform"] == "tiktok" and job["status"] == "USER_SCHEDULED"))
+            if not can_confirm or job["platform"] == "youtube":
                 raise ValueError("Somente uma publicação assistida preparada pode ser confirmada.")
-            if url:
-                parsed = urlparse(url)
-                hosts = {"instagram": ("instagram.com",), "facebook": ("facebook.com", "fb.watch"),
-                         "tiktok": ("tiktok.com",), "kwai": ("kwai.com", "kw.ai")}[job["platform"]]
-                if parsed.scheme != "https" or not any(parsed.hostname == h or
-                        (parsed.hostname or "").endswith("." + h) for h in hosts):
-                    raise ValueError("Informe um link HTTPS da plataforma selecionada.")
+            self._validate_manual_url(job["platform"], url)
             self._update(identity, status="USER_CONFIRMED", url=url, confirmation="USER", completed_at=now())
+
+    @staticmethod
+    def _validate_manual_url(platform, url):
+        if not url:
+            return
+        parsed = urlparse(url)
+        hosts = {"instagram": ("instagram.com",), "facebook": ("facebook.com", "fb.watch"),
+                 "tiktok": ("tiktok.com",), "kwai": ("kwai.com", "kw.ai")}[platform]
+        if (parsed.scheme != "https" or parsed.username or parsed.password or parsed.port not in {None, 443}
+                or not any(parsed.hostname == h or (parsed.hostname or "").endswith("." + h) for h in hosts)):
+            raise ValueError("Informe um link HTTPS da plataforma selecionada.")
+
+    def confirm_tiktok_schedule(self, identity, scheduled_at, url=""):
+        """Record a user's declaration, never treat a scheduled post as published."""
+        if not scheduled_at:
+            raise ValueError("Informe o horário que você confirmou no TikTok Studio.")
+        date = utc_time(scheduled_at)
+        if date <= now():
+            raise ValueError("O agendamento declarado deve estar no futuro.")
+        with self._state_lock:
+            job = self.job(identity)
+            if job["platform"] != "tiktok" or job["status"] != "WAITING_USER":
+                raise ValueError("Somente uma tarefa TikTok preparada pode ter agendamento declarado.")
+            self._validate_manual_url("tiktok", url)
+            metadata = job["metadata"] | {"tiktok_scheduled_at": date}
+            with self.db.connection() as connection:
+                connection.execute("UPDATE jobs SET status='USER_SCHEDULED',metadata=?,url=?,confirmation='USER',"
+                                   "completed_at=? WHERE id=?", (json.dumps(metadata), url, now(), identity))
+                connection.execute("INSERT INTO audit_events(job_id,created_at,event) VALUES (?,?,?)",
+                                   (identity, now(), "USER_SCHEDULED"))
+            LOG.info("job_state id=%s status=USER_SCHEDULED", identity)
 
     def stats(self):
         jobs = self.jobs()
-        return {"videos": len(self.videos()), "completed": sum(j["status"] in TERMINAL - {"CANCELLED"} for j in jobs),
+        return {"videos": len(self.videos()), "completed": sum(j["status"] in {
+                    "PUBLISHED", "UPLOADED_PRIVATE", "USER_CONFIRMED"} for j in jobs),
+                "user_scheduled": sum(j["status"] == "USER_SCHEDULED" for j in jobs),
                 "waiting": sum(j["status"] == "WAITING_USER" for j in jobs),
                 "failed": sum(j["status"] in {"FAILED", "UNKNOWN_REMOTE_STATUS"} for j in jobs),
                 "pending": sum(j["status"] in {"READY", "SCHEDULED", "PROCESSING"} for j in jobs)}
