@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "multipost-desktop"
+version = "0.1.0"
+description = "Publicação de vídeos com integrações oficiais e assistência por plataforma"
+requires-python = ">=3.12"
+dependencies = [
+  "customtkinter>=5.2.2,<6", "Pillow>=11,<13", "SQLAlchemy>=2.0.36,<3",
+  "google-api-python-client>=2.150,<3", "google-auth-oauthlib>=1.2,<2",
+  "google-auth-httplib2>=0.2,<1", "keyring>=25,<26", "requests>=2.32.3,<3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3,<10", "pytest-mock>=3.14,<4", "ruff>=0.9,<1"]
+build = ["pyinstaller>=6.11,<7"]
+api = ["fastapi>=0.115,<1", "uvicorn>=0.32,<1", "httpx>=0.28,<1"]
+
+[project.scripts]
+multipost = "multipost.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
